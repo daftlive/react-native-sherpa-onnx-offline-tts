@@ -15,6 +15,18 @@ Pod::Spec.new do |s|
   s.source       = { :git => "https://github.com/kislay99/react-native-sherpa-onnx-offline-tts.git", :tag => "#{s.version}" }
 
   s.source_files = "ios/**/*.{h,m,mm,swift}"
+  s.resources = ['ios/Resources/**/*']
+
+  # Add the .xcframework dependencies
+  s.vendored_frameworks = [
+    'build-ios/ios-onnxruntime/1.17.1/onnxruntime.xcframework',
+    'build-ios/sherpa-onnx.xcframework'
+  ]
+
+  # Include header search paths if needed for the framework headers
+  s.xcconfig = {
+    'HEADER_SEARCH_PATHS' => '$(PODS_TARGET_SRCROOT)/build-ios/sherpa-onnx.xcframework/Headers'
+  }
 
   # Use install_modules_dependencies helper to install the dependencies if React Native version >=0.71.0.
   # See https://github.com/facebook/react-native/blob/febf6b7f33fdb4904669f99d795eba4c0f95d7bf/scripts/cocoapods/new_architecture.rb#L79.

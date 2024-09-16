@@ -23,6 +23,7 @@
     "android",
     "ios",
     "cpp",
+    "build-ios",
     "*.podspec",
     "!ios/build",
     "!android/build",

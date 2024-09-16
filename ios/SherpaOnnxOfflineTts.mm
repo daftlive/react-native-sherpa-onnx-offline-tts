@@ -1,14 +1,18 @@
 #import <React/RCTBridgeModule.h>
 
-@interface RCT_EXTERN_MODULE(SherpaOnnxOfflineTts, NSObject)
+@interface RCT_EXTERN_MODULE(TTSManager, NSObject)
 
-RCT_EXTERN_METHOD(multiply:(float)a withB:(float)b
-                 withResolver:(RCTPromiseResolveBlock)resolve
-                 withRejecter:(RCTPromiseRejectBlock)reject)
+// Initialize method exposed to React Native
+RCT_EXTERN_METHOD(initializeWithSampleRate:(double)sampleRate channels:(NSInteger)channels)
 
-+ (BOOL)requiresMainQueueSetup
-{
-  return NO;
-}
+// Generate and Play method exposed to React Native
+RCT_EXTERN_METHOD(generateAndPlay:(NSString *)text 
+                  sid:(NSInteger)sid 
+                  speed:(double)speed 
+                  resolver:(RCTPromiseResolveBlock)resolver 
+                  rejecter:(RCTPromiseRejectBlock)rejecter)
+
+// Deinitialize method exposed to React Native
+RCT_EXTERN_METHOD(deinitialize)
 
 @end

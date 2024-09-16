@@ -1,22 +1,41 @@
-import { NativeModules, Platform } from 'react-native';
+// TTSManager.js
 
-const LINKING_ERROR =
-  `The package 'react-native-sherpa-onnx-offline-tts' doesn't seem to be linked. Make sure: \n\n` +
-  Platform.select({ ios: "- You have run 'pod install'\n", default: '' }) +
-  '- You rebuilt the app after installing the package\n' +
-  '- You are not using Expo Go\n';
+import { NativeModules, NativeEventEmitter } from 'react-native';
 
-const SherpaOnnxOfflineTts = NativeModules.SherpaOnnxOfflineTts
-  ? NativeModules.SherpaOnnxOfflineTts
-  : new Proxy(
-      {},
-      {
-        get() {
-          throw new Error(LINKING_ERROR);
-        },
-      }
-    );
+const { TTSManager } = NativeModules;
+const ttsManagerEmitter = new NativeEventEmitter(TTSManager);
 
-export function multiply(a: number, b: number): Promise<number> {
-  return SherpaOnnxOfflineTts.multiply(a, b);
-}
+const initialize = (sampleRate: any, channels: any) => {
+  TTSManager.initializeWithSampleRate(sampleRate, channels);
+};
+
+const generateAndPlay = async (text: any, sid: any, speed: any) => {
+  try {
+    const result = await TTSManager.generateAndPlay(text, sid, speed);
+    console.log(result);
+  } catch (error) {
+    console.error(error);
+  }
+};
+
+const deinitialize = () => {
+  TTSManager.deinitialize();
+};
+
+const addVolumeListener = (callback: any) => {
+  const subscription = ttsManagerEmitter.addListener(
+    'VolumeUpdate',
+    (event) => {
+      const { volume } = event;
+      callback(volume);
+    }
+  );
+  return subscription;
+};
+
+export default {
+  initialize,
+  generateAndPlay,
+  deinitialize,
+  addVolumeListener,
+};
