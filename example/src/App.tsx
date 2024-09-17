@@ -1,10 +1,6 @@
-// import { useState, useEffect } from 'react';
-// import { StyleSheet, View, Text } from 'react-native';
-// import { getTTS } from 'react-native-sherpa-onnx-offline-tts';
-
 // App.js
 
-import React, { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { View, Button, Animated, StyleSheet } from 'react-native';
 import TTSManager from 'react-native-sherpa-onnx-offline-tts';
 
