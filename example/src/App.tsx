@@ -10,11 +10,12 @@ const App = () => {
 
   useEffect(() => {
     // Initialize the TTSManager with sample rate 44100 Hz and 2 channels (stereo)
-    TTSManager.initialize(22050, 1);
+    TTSManager.initialize('male');
 
     // Add a listener for volume updates
     const subscription = TTSManager.addVolumeListener((currentVolume: any) => {
       setVolume(currentVolume);
+      // console.log(currentVolume);
       // Update animation based on volume
       Animated.spring(animatedScale, {
         toValue: 1 + currentVolume * 5, // Scale factor can be adjusted
@@ -38,10 +39,6 @@ const App = () => {
     TTSManager.generateAndPlay(text, sid, speed);
   };
 
-  const handleStop = () => {
-    TTSManager.deinitialize();
-  };
-
   return (
     <View style={styles.container}>
       <Animated.View
@@ -54,7 +51,6 @@ const App = () => {
       />
       <View style={styles.buttons}>
         <Button title="Play Audio" onPress={handlePlay} />
-        <Button title="Stop Audio" onPress={handleStop} />
       </View>
     </View>
   );

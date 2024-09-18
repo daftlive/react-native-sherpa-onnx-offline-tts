@@ -11,7 +11,7 @@ protocol AudioPlayerDelegate: AnyObject {
 
 @objc(TTSManager)
 class TTSManager: RCTEventEmitter, AudioPlayerDelegate {
-    private var tts = createOfflineTts() // Assuming createOfflineTts() is implemented elsewhere
+    private var tts: SherpaOnnxOfflineTtsWrapper?
     private var realTimeAudioPlayer: AudioPlayer?
     
     override init() {
@@ -30,10 +30,11 @@ class TTSManager: RCTEventEmitter, AudioPlayerDelegate {
     }
     
     // Initialize TTS and Audio Player
-    @objc(initializeWithSampleRate:channels:)
-    func initializeWithSampleRate(_ sampleRate: Double, channels: Int) {
+    @objc(initializeTTS:channels:modelId:)
+    func initializeTTS(_ sampleRate: Double, channels: Int, modelId: String) {
         self.realTimeAudioPlayer = AudioPlayer(sampleRate: sampleRate, channels: AVAudioChannelCount(channels))
         self.realTimeAudioPlayer?.delegate = self // Set delegate to receive volume updates
+        self.tts = createOfflineTts(modelId: modelId)
     }
 
     // Generate audio and play in real-time
@@ -101,7 +102,10 @@ class TTSManager: RCTEventEmitter, AudioPlayerDelegate {
     private func generateAudio(for text: String, sid: Int, speed: Double) {
         print("Generating audio for \(text)")
         let startTime = Date()
-        let audio = tts.generate(text: text, sid: sid, speed: Float(speed))
+        guard let audio = tts?.generate(text: text, sid: sid, speed: Float(speed)) else {
+            print("Error: TTS was never initialised")
+            return
+        }
         let endTime = Date()
         let generationTime = endTime.timeIntervalSince(startTime)
         print("Time taken for TTS generation: \(generationTime) seconds")

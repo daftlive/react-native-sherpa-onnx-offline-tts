@@ -12,11 +12,21 @@ npm install react-native-sherpa-onnx-offline-tts
 
 
 ```js
-import { multiply } from 'react-native-sherpa-onnx-offline-tts';
+import TTSManager from 'react-native-sherpa-onnx-offline-tts';
 
 // ...
 
-const result = await multiply(3, 7);
+// Initialize with a male voice model
+TTSManager.initialize('male');
+
+// Or initialize with a female voice model
+TTSManager.initialize('female');
+
+const text = "Hello, this is a test message.";
+const speakerId = 0;
+const speed = 1.0;
+
+await TTSManager.generateAndPlay(text, speakerId, speed);
 ```
 
 

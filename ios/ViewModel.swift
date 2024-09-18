@@ -166,16 +166,14 @@ func getTtsFor_zh_en_melo_tts() -> SherpaOnnxOfflineTtsWrapper {
   return SherpaOnnxOfflineTtsWrapper(config: &config)
 }
 
-func createOfflineTts() -> SherpaOnnxOfflineTtsWrapper {
-  // Please enable only one of them
-  return getTtsFor_en_US_hfc_female_medium()
-  // return getTtsFor_en_US_ryan_medium()
-
-  // return getTtsForVCTK()
-
-  // return getTtsForAishell3()
-
-  // return getTtsFor_zh_en_melo_tts()
-
-  // please add more models on need by following the above two examples
+func createOfflineTts(modelId: String) -> SherpaOnnxOfflineTtsWrapper {
+    switch modelId {
+    case "female":
+        return getTtsFor_en_US_hfc_female_medium()
+    case "male":
+        return getTtsFor_en_US_ryan_medium()
+    default:
+        print("Incorrect model Id, going with male")
+        return getTtsFor_en_US_ryan_medium()
+    }
 }

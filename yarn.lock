@@ -11039,7 +11039,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"react-native-sherpa-onnx-offline-tts-example@^0.0.1, react-native-sherpa-onnx-offline-tts-example@workspace:example":
+"react-native-sherpa-onnx-offline-tts-example@workspace:example":
   version: 0.0.0-use.local
   resolution: "react-native-sherpa-onnx-offline-tts-example@workspace:example"
   dependencies:
@@ -11671,7 +11671,6 @@ __metadata:
     react-is: ^18.3.1
     react-native: 0.75.3
     react-native-builder-bob: ^0.30.2
-    react-native-sherpa-onnx-offline-tts-example: ^0.0.1
     react-refresh: ^0.14.2
     read-pkg: ^3.0.0
     read-pkg-up: ^7.0.1

@@ -5,8 +5,8 @@ import { NativeModules, NativeEventEmitter } from 'react-native';
 const { TTSManager } = NativeModules;
 const ttsManagerEmitter = new NativeEventEmitter(TTSManager);
 
-const initialize = (sampleRate: any, channels: any) => {
-  TTSManager.initializeWithSampleRate(sampleRate, channels);
+const initialize = (modelId: string) => {
+  TTSManager.initializeTTS(22050, 1, modelId);
 };
 
 const generateAndPlay = async (text: any, sid: any, speed: any) => {

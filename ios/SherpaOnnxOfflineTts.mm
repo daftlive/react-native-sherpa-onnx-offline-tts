@@ -3,7 +3,7 @@
 @interface RCT_EXTERN_MODULE(TTSManager, NSObject)
 
 // Initialize method exposed to React Native
-RCT_EXTERN_METHOD(initializeWithSampleRate:(double)sampleRate channels:(NSInteger)channels)
+RCT_EXTERN_METHOD(initializeTTS:(double)sampleRate channels:(NSInteger)channels modelId:(NSString *)modelId)
 
 // Generate and Play method exposed to React Native
 RCT_EXTERN_METHOD(generateAndPlay:(NSString *)text 
