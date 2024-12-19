@@ -15,6 +15,7 @@ const App = () => {
     // Add a listener for volume updates
     const subscription = TTSManager.addVolumeListener((currentVolume: any) => {
       setVolume(currentVolume);
+      console.log(currentVolume);
       // console.log(currentVolume);
       // Update animation based on volume
       Animated.spring(animatedScale, {

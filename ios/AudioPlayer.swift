@@ -75,16 +75,15 @@ class AudioPlayer: NSObject {
 
     /// Sets up the AVAudioSession with the desired category and activates it.
     private func setupAudioSession() {
-        do {
-            let session = AVAudioSession.sharedInstance()
-            // Set category without options to prevent ducking or mixing
-            try session.setCategory(.playback, mode: .default, options: [])
-            try session.setActive(true)
-            print("Audio session set up successfully")
-        } catch {
-            print("Failed to set up AVAudioSession: \(error)")
-        }
+    do {
+        let session = AVAudioSession.sharedInstance()
+        try session.setCategory(.playAndRecord, mode: .default, options: [.mixWithOthers, .defaultToSpeaker])
+        try session.setActive(true)
+        print("Audio session set up successfully")
+    } catch {
+        print("Failed to set up AVAudioSession: \(error)")
     }
+}
 
     /// Deactivates the AVAudioSession.
     private func deactivateAudioSession() {
