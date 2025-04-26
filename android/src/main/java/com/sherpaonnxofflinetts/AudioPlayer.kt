@@ -17,20 +17,15 @@ class AudioPlayer(
     private var audioTrack: AudioTrack? = null
     private val audioQueue = LinkedBlockingQueue<FloatArray>()
     @Volatile private var isRunning = false
+    @Volatile private var sentCompletion = false          // ← NEW
 
     private var playbackThread: Thread? = null
 
-    // Instead of a ring buffer, we will accumulate samples to form 200 ms chunks.
     private val chunkDurationMs = 200L
     private val samplesPerChunk = ((sampleRate * channels * chunkDurationMs) / 1000).toInt()
-
-    // A buffer to accumulate samples until we have at least one chunk
     private val accumulationBuffer = mutableListOf<Float>()
-
-    // A queue to hold computed volumes for each chunk
     private val volumesQueue = LinkedBlockingQueue<Float>()
 
-    // We'll update volume every 200 ms
     private val volumeUpdateIntervalMs: Long = 200
     private val scalingFactor = 0.42f
 
@@ -38,16 +33,12 @@ class AudioPlayer(
 
     private val volumeUpdateRunnable = object : Runnable {
         override fun run() {
-            if (!isRunning){
-                return
-            }
+            if (!isRunning) return
 
-            // Attempt to retrieve a volume from the queue
             val volume = volumesQueue.poll()
             if (volume != null) {
-                Log.d("kislaytest", "Volume Update: scaledVolume=$volume")
                 delegate?.didUpdateVolume(volume)
-            } else {
+            } else if (!sentCompletion) {                 // don't spam 0 after -1
                 delegate?.didUpdateVolume(0f)
             }
 
@@ -58,12 +49,17 @@ class AudioPlayer(
     }
 
     fun start() {
-        val channelConfig = if (channels == 1) AudioFormat.CHANNEL_OUT_MONO else AudioFormat.CHANNEL_OUT_STEREO
+        val channelConfig = if (channels == 1)
+            AudioFormat.CHANNEL_OUT_MONO
+        else
+            AudioFormat.CHANNEL_OUT_STEREO
 
         val desiredBufferDurationMs = 20
         val bufferSizeInSamples = (sampleRate * desiredBufferDurationMs) / 1000
         val bufferSizeInBytes = bufferSizeInSamples * 4 * channels
-        val minBufferSizeInBytes = AudioTrack.getMinBufferSize(sampleRate, channelConfig, AudioFormat.ENCODING_PCM_FLOAT)
+        val minBufferSizeInBytes = AudioTrack.getMinBufferSize(
+            sampleRate, channelConfig, AudioFormat.ENCODING_PCM_FLOAT
+        )
 
         if (minBufferSizeInBytes == AudioTrack.ERROR || minBufferSizeInBytes == AudioTrack.ERROR_BAD_VALUE) {
             throw IllegalStateException("Invalid buffer size")
@@ -75,7 +71,7 @@ class AudioPlayer(
             .setAudioAttributes(
                 AudioAttributes.Builder()
                     .setUsage(AudioAttributes.USAGE_MEDIA)
-                    .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+                    .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC) // ← CHANGED
                     .build()
             )
             .setAudioFormat(
@@ -92,7 +88,7 @@ class AudioPlayer(
         audioTrack?.play()
         isRunning = true
 
-        mainHandler.post(volumeUpdateRunnable) // Start the volume updater immediately
+        mainHandler.post(volumeUpdateRunnable)
 
         playbackThread = Thread {
             Log.d("kislaytest", "Playback thread started.")
@@ -103,51 +99,30 @@ class AudioPlayer(
                         accumulationBuffer.addAll(samples.asList())
                         processAccumulatedSamples()
                     }
-                    val result = audioTrack?.write(samples, 0, samples.size, AudioTrack.WRITE_BLOCKING) ?: 0
-                    if (result < 0) {
-                        Log.e("kislaytest", "AudioTrack write error: $result")
-                    } else {
-                        Log.d("kislaytest", "Wrote ${samples.size} samples to AudioTrack")
-                    }
-
-                    // Accumulate samples for volume computation
-                    
-
+                    audioTrack?.write(samples, 0, samples.size, AudioTrack.WRITE_BLOCKING)
+                    maybeSendCompletion()                   // ← NEW
                 } catch (e: InterruptedException) {
-                    Log.d("kislaytest", "Playback thread interrupted")
                     break
                 }
             }
-            Log.d("kislaytest", "Playback thread exiting.")
         }
         playbackThread?.start()
-
-        Log.d("kislaytest", "AudioPlayer started with sampleRate=$sampleRate, channels=$channels")
     }
 
     private fun processAccumulatedSamples() {
-        // If we have enough samples for one or more 200ms chunks, compute volume for each chunk
         while (accumulationBuffer.size >= samplesPerChunk) {
-            // Take first chunkSize samples
             val chunkSamples = accumulationBuffer.subList(0, samplesPerChunk).toFloatArray()
             accumulationBuffer.subList(0, samplesPerChunk).clear()
 
             val rawPeak = computePeak(chunkSamples)
             val volume = rawPeak * scalingFactor
             volumesQueue.offer(volume)
-
-            Log.d("kislaytest", "Computed volume for a chunk: rawPeak=$rawPeak, scaledVolume=$volume")
         }
     }
 
     fun enqueueAudioData(samples: FloatArray, sr: Int) {
-        if (sr != sampleRate) {
-            throw IllegalArgumentException("Sample rate mismatch")
-        }
-
-        val minSample = samples.minOrNull() ?: 0f
-        val maxSample = samples.maxOrNull() ?: 0f
-        Log.d("kislaytest", "Enqueuing block: min=$minSample, max=$maxSample, size=${samples.size}")
+        if (sr != sampleRate) throw IllegalArgumentException("Sample rate mismatch")
+        sentCompletion = false                              // ← reset
         audioQueue.offer(samples)
     }
 
@@ -155,11 +130,17 @@ class AudioPlayer(
         var maxVal = 0f
         for (sample in data) {
             val absVal = abs(sample)
-            if (absVal > maxVal) {
-                maxVal = absVal
-            }
+            if (absVal > maxVal) maxVal = absVal
         }
         return maxVal
+    }
+
+    // Completion helper
+    private fun maybeSendCompletion() {
+        if (!sentCompletion && audioQueue.isEmpty() && accumulationBuffer.isEmpty()) {
+            sentCompletion = true
+            mainHandler.post { delegate?.didUpdateVolume(-1f) }
+        }
     }
 
     fun stopPlayer() {
@@ -178,7 +159,6 @@ class AudioPlayer(
             volumesQueue.clear()
         }
 
-        delegate?.didUpdateVolume(0f)
-        Log.d("kislaytest", "AudioPlayer stopped and cleaned up")
+        mainHandler.post { delegate?.didUpdateVolume(-1f) } // ← now sends -1
     }
 }

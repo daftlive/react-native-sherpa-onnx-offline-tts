@@ -1,6 +1,6 @@
 {
   "name": "react-native-sherpa-onnx-offline-tts",
-  "version": "0.1.6",
+  "version": "0.2.3",
   "description": "This module is wrapper over sherpa onnx for tts",
   "source": "./src/index.tsx",
   "main": "./lib/commonjs/index.js",
@@ -439,7 +439,6 @@
     "fs-extra": "^11.2.0",
     "fs-minipass": "^3.0.3",
     "fs.realpath": "^1.0.0",
-    "fsevents": "^2.3.3",
     "function-bind": "^1.1.2",
     "function.prototype.name": "^1.1.6",
     "functions-have-names": "^1.2.3",
@@ -907,7 +906,6 @@
     "ts-node": "^10.9.2",
     "tslib": "^2.7.0",
     "tsutils": "^3.21.0",
-    "turbo-darwin-arm64": "^1.13.4",
     "type-check": "^0.4.0",
     "type-detect": "^4.0.8",
     "type-fest": "^1.4.0",
@@ -975,5 +973,9 @@
     "yargs-parser": "^20.2.9",
     "yn": "^3.1.1",
     "yocto-queue": "^0.1.0"
+  },
+  "optionalDependencies": {
+    "fsevents": "^2.3.3",
+    "turbo-darwin-arm64": "^1.13.4"
   }
 }

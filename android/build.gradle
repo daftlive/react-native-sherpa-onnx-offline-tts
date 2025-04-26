@@ -16,7 +16,7 @@ buildscript {
 
 def reactNativeArchitectures() {
   def value = rootProject.getProperties().get("reactNativeArchitectures")
-  return value ? value.split(",") : ["armeabi-v7a", "x86", "x86_64", "arm64-v8a"]
+  return value ? value.split(",") : ["armeabi-v7a", "arm64-v8a"]
 }
 
 def isNewArchitectureEnabled() {
@@ -54,6 +54,7 @@ android {
     sourceSets {
       main {
         manifest.srcFile "src/main/AndroidManifestNew.xml"
+        assets.srcDirs += ['../ios/Resources']
       }
     }
   }

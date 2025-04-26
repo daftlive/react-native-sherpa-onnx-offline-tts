@@ -11,8 +11,14 @@ const root = path.resolve(__dirname, '..');
  *
  * @type {import('metro-config').MetroConfig}
  */
-module.exports = getConfig(getDefaultConfig(__dirname), {
-  root,
-  pkg,
-  project: __dirname,
-});
+module.exports = {
+  ...getConfig(getDefaultConfig(__dirname), {
+    root,
+    pkg,
+    project: __dirname,
+  }),
+  resolver: {
+    assetExts: [...getDefaultConfig(__dirname).resolver.assetExts, 'zip'],
+  },
+  watchFolders: [root], // Include the library's root directory
+};

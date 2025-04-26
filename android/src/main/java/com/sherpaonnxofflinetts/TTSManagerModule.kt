@@ -9,6 +9,7 @@ import android.content.Context
 import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
+import org.json.JSONObject
 
 class ModelLoader(private val context: Context) {
 
@@ -97,12 +98,17 @@ class TTSManagerModule(private val reactContext: ReactApplicationContext) : Reac
 
         // Determine model paths based on modelId
         
-        val modelDirAssetPath = "models"
-        val modelDirInternal = File(reactContext.filesDir, "models")
-        modelLoader.copyAssetDirectory(modelDirAssetPath, modelDirInternal)
-        val modelPath = File(modelDirInternal, if (modelId.lowercase() == "male") "en_US-ryan-medium.onnx" else "en_US-hfc_female-medium.onnx").absolutePath
-        val tokensPath = File(modelDirInternal, "tokens.txt").absolutePath
-        val dataDirPath = File(modelDirInternal, "espeak-ng-data").absolutePath // Directory copy handled above
+        // val modelDirAssetPath = "models"
+        // val modelDirInternal = reactContext.filesDir
+        // modelLoader.copyAssetDirectory(modelDirAssetPath, modelDirInternal)
+        // val modelPath = File(modelDirInternal, if (modelId.lowercase() == "male") "en_US-ryan-medium.onnx" else "en_US-hfc_female-medium.onnx").absolutePath
+        // val tokensPath = File(modelDirInternal, "tokens.txt").absolutePath
+        // val dataDirPath = File(modelDirInternal, "espeak-ng-data").absolutePath // Directory copy handled above
+
+        val jsonObject = JSONObject(modelId)
+        val modelPath = jsonObject.getString("modelPath")
+        val tokensPath = jsonObject.getString("tokensPath")
+        val dataDirPath = jsonObject.getString("dataDirPath")
 
         // Build OfflineTtsConfig using the helper function
         val config = OfflineTtsConfig(
@@ -134,7 +140,6 @@ class TTSManagerModule(private val reactContext: ReactApplicationContext) : Reac
         }
 
         val sentences = splitText(trimmedText, 15)
-        thread {
             try {
                 for (sentence in sentences) {
                     val processedSentence = if (sentence.endsWith(".")) sentence else "$sentence."
@@ -145,7 +150,6 @@ class TTSManagerModule(private val reactContext: ReactApplicationContext) : Reac
             } catch (e: Exception) {
                 promise.reject("GENERATION_ERROR", "Error during audio generation: ${e.message}")
             }
-        }
     }
 
     // Deinitialize method exposed to React Native
@@ -210,7 +214,9 @@ class TTSManagerModule(private val reactContext: ReactApplicationContext) : Reac
         // Emit the volume to JavaScript
         if (reactContext.hasActiveCatalystInstance()) {
             val params = Arguments.createMap()
+            
             params.putDouble("volume", volume.toDouble())
+            println("kislaytest: Volume Update: $volume")
             reactContext
                 .getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter::class.java)
                 .emit("VolumeUpdate", params)
