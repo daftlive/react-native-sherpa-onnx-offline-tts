@@ -37,6 +37,35 @@ class TTSManager: RCTEventEmitter, AudioPlayerDelegate {
         self.tts = createOfflineTts(modelId: modelId)
     }
 
+    // Generate audio and return as base64 string
+    @objc(generate:sid:speed:resolver:rejecter:)
+    func generate(_ text: String, sid: Int, speed: Double, resolver: @escaping RCTPromiseResolveBlock, rejecter: @escaping RCTPromiseRejectBlock) {
+        let trimmedText = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        
+        guard !trimmedText.isEmpty else {
+            rejecter("EMPTY_TEXT", "Input text is empty", nil)
+            return
+        }
+        
+        let processedText = trimmedText.hasSuffix(".") ? trimmedText : "\(trimmedText)."
+        
+        guard let audio = tts?.generate(text: processedText, sid: sid, speed: Float(speed)) else {
+            rejecter("TTS_ERROR", "TTS was never initialised", nil)
+            return
+        }
+        
+        // Convert audio samples to Data
+        let audioData = Data(bytes: audio.samples, count: audio.samples.count * MemoryLayout<Float>.size)
+        let base64String = audioData.base64EncodedString()
+        
+        let result: [String: Any] = [
+            "audioData": base64String,
+            "sampleRate": audio.sampleRate
+        ]
+        
+        resolver(result)
+    }
+
     // Generate audio and play in real-time
     @objc(generateAndPlay:sid:speed:resolver:rejecter:)
     func generateAndPlay(_ text: String, sid: Int, speed: Double, resolver: @escaping RCTPromiseResolveBlock, rejecter: @escaping RCTPromiseRejectBlock) {

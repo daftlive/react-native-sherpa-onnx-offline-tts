@@ -130,6 +130,50 @@ class TTSManagerModule(private val reactContext: ReactApplicationContext) : Reac
         realTimeAudioPlayer?.start()
     }
 
+    // Generate audio and return as base64 string
+    @ReactMethod
+    fun generate(text: String, sid: Int, speed: Double, promise: Promise) {
+        val trimmedText = text.trim()
+        if (trimmedText.isEmpty()) {
+            promise.reject("EMPTY_TEXT", "Input text is empty")
+            return
+        }
+
+        val processedText = if (trimmedText.endsWith(".")) trimmedText else "$trimmedText."
+
+        try {
+            val startTime = System.currentTimeMillis()
+            val audio = tts?.generate(processedText, sid, speed.toFloat())
+            val endTime = System.currentTimeMillis()
+            val generationTime = (endTime - startTime) / 1000.0
+            println("Time taken for TTS generation: $generationTime seconds")
+
+            if (audio == null) {
+                promise.reject("TTS_ERROR", "TTS was never initialized or audio generation failed")
+                return
+            }
+
+            // Convert float array to byte array
+            val byteBuffer = java.nio.ByteBuffer.allocate(audio.samples.size * 4)
+            byteBuffer.order(java.nio.ByteOrder.LITTLE_ENDIAN)
+            for (sample in audio.samples) {
+                byteBuffer.putFloat(sample)
+            }
+            val audioBytes = byteBuffer.array()
+            
+            // Convert to base64
+            val base64String = android.util.Base64.encodeToString(audioBytes, android.util.Base64.NO_WRAP)
+
+            val result = Arguments.createMap()
+            result.putString("audioData", base64String)
+            result.putInt("sampleRate", audio.sampleRate)
+
+            promise.resolve(result)
+        } catch (e: Exception) {
+            promise.reject("GENERATION_ERROR", "Error during audio generation: ${e.message}")
+        }
+    }
+
     // Generate and Play method exposed to React Native
     @ReactMethod
     fun generateAndPlay(text: String, sid: Int, speed: Double, promise: Promise) {
