@@ -85,10 +85,11 @@ async function sayHello() {
 | Method | Signature | Description |
 |--------|-----------|-------------|
 | **initialize** | `(modelConfigJson: string): Promise<void>` | Must be called once before any synthesis. Pass a JSON string with `modelPath`, `tokensPath`, `dataDirPath`. |
-| **generate** | `(text: string, speakerId: number, speed: number): Promise<{ audioData: string, sampleRate: number }>` | Generates speech and returns an object with base64 encoded audio data and sample rate. Automatically splits long texts into chunks. |
-| **generateAndPlay** | `(text: string, speakerId: number, speed: number): Promise<void>` | Generates speech and streams it to the device speaker. Automatically splits long texts into chunks. |
+| **generate** | `(text: string, speakerId: number, speed: number): Promise<{success: boolean, totalChunks: number}>` | Generates speech and emits chunks progressively via `AudioChunkGenerated` event. Returns a promise that resolves when all chunks are generated. |
+| **generateAndPlay** | `(text: string, speakerId: number, speed: number): Promise<void>` | Generates speech and streams it to the device speaker. |
 | **stopPlaying** | `(): void` | Immediately stops playback. |
 | **addVolumeListener** | `(cb: (volume: number) => void): EmitterSubscription` | Subscribes to real‑time RMS volume callbacks during playback. Call `subscription.remove()` to unsubscribe. |
+| **addAudioChunkListener** | `(cb: (data: {chunk: string, index: number, total: number, sampleRate: number}) => void): EmitterSubscription` | Subscribes to audio chunk events during `generate()`. The `chunk` is base64-encoded Float32 PCM data. Call `subscription.remove()` to unsubscribe. |
 | **deinitialize** | `(): void` | Frees native resources – call this when your app unmounts or goes to background for a long time. |
 
 ---

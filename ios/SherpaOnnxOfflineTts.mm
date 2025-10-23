@@ -5,15 +5,15 @@
 // Initialize method exposed to React Native
 RCT_EXTERN_METHOD(initializeTTS:(double)sampleRate channels:(NSInteger)channels modelId:(NSString *)modelId)
 
-// Generate method exposed to React Native
-RCT_EXTERN_METHOD(generate:(NSString *)text 
+// Generate and Play method exposed to React Native
+RCT_EXTERN_METHOD(generateAndPlay:(NSString *)text 
                   sid:(NSInteger)sid 
                   speed:(double)speed 
                   resolver:(RCTPromiseResolveBlock)resolver 
                   rejecter:(RCTPromiseRejectBlock)rejecter)
 
-// Generate and Play method exposed to React Native
-RCT_EXTERN_METHOD(generateAndPlay:(NSString *)text 
+// Generate audio without playing - emits chunks progressively
+RCT_EXTERN_METHOD(generate:(NSString *)text 
                   sid:(NSInteger)sid 
                   speed:(double)speed 
                   resolver:(RCTPromiseResolveBlock)resolver 

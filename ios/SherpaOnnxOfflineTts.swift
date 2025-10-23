@@ -26,7 +26,7 @@ class TTSManager: RCTEventEmitter, AudioPlayerDelegate {
     
     // Specify the events that can be emitted
     override func supportedEvents() -> [String]! {
-        return ["VolumeUpdate"]
+        return ["VolumeUpdate", "AudioChunkGenerated"]
     }
     
     // Initialize TTS and Audio Player
@@ -35,66 +35,6 @@ class TTSManager: RCTEventEmitter, AudioPlayerDelegate {
         self.realTimeAudioPlayer = AudioPlayer(sampleRate: sampleRate, channels: AVAudioChannelCount(channels))
         self.realTimeAudioPlayer?.delegate = self // Set delegate to receive volume updates
         self.tts = createOfflineTts(modelId: modelId)
-    }
-
-    // Generate audio and return as base64 string
-    @objc(generate:sid:speed:resolver:rejecter:)
-    func generate(_ text: String, sid: Int, speed: Double, resolver: @escaping RCTPromiseResolveBlock, rejecter: @escaping RCTPromiseRejectBlock) {
-        let trimmedText = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        
-        guard !trimmedText.isEmpty else {
-            rejecter("EMPTY_TEXT", "Input text is empty", nil)
-            return
-        }
-        
-        print("Generating audio for text with \(trimmedText.split(separator: " ").count) words")
-        
-        // Split the text into manageable sentences
-        let sentences = splitText(trimmedText, maxWords: 15)
-        print("Split into \(sentences.count) sentences")
-        
-        var allSamples: [Float] = []
-        var sampleRate: Int32 = 0
-        
-        for (index, sentence) in sentences.enumerated() {
-            let processedSentence = sentence.hasSuffix(".") ? sentence : "\(sentence)."
-            
-            print("Generating chunk \(index + 1)/\(sentences.count): '\(processedSentence)'")
-            
-            guard let audio = tts?.generate(text: processedSentence, sid: sid, speed: Float(speed)) else {
-                rejecter("TTS_ERROR", "TTS generation failed for sentence: \(processedSentence)", nil)
-                return
-            }
-            
-            if sampleRate == 0 {
-                sampleRate = audio.sampleRate
-            }
-            
-            let samplesCount = Int(audio.n)
-            print("Generated \(samplesCount) samples at \(sampleRate)Hz")
-            
-            // Create array from pointer without extra copying
-            let samplesArray = Array(UnsafeBufferPointer(start: audio.samples, count: samplesCount))
-            allSamples.append(contentsOf: samplesArray)
-        }
-        
-        print("Total samples: \(allSamples.count) at \(sampleRate)Hz")
-        print("Duration: \(Float(allSamples.count) / Float(sampleRate)) seconds")
-        
-        // Convert combined audio samples to Data - use withUnsafeBytes for efficiency
-        let audioData = allSamples.withUnsafeBytes { bytes in
-            Data(bytes: bytes.baseAddress!, count: bytes.count)
-        }
-        let base64String = audioData.base64EncodedString()
-        
-        print("Base64 size: \(base64String.count) chars")
-        
-        let result: [String: Any] = [
-            "audioData": base64String,
-            "sampleRate": Int(sampleRate)
-        ]
-        
-        resolver(result)
     }
 
     // Generate audio and play in real-time
@@ -116,6 +56,55 @@ class TTSManager: RCTEventEmitter, AudioPlayerDelegate {
         }
         
         resolver("Audio generated and played successfully")
+    }
+
+    // Generate audio without playing - emit chunks progressively
+    @objc(generate:sid:speed:resolver:rejecter:)
+    func generate(_ text: String, sid: Int, speed: Double, resolver: @escaping RCTPromiseResolveBlock, rejecter: @escaping RCTPromiseRejectBlock) {
+        let trimmedText = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        
+        guard !trimmedText.isEmpty else {
+            rejecter("EMPTY_TEXT", "Input text is empty", nil)
+            return
+        }
+        
+        // Split the text into manageable sentences
+        let sentences = splitText(trimmedText, maxWords: 15)
+        
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            guard let self = self else { return }
+            
+            for (index, sentence) in sentences.enumerated() {
+                let processedSentence = sentence.hasSuffix(".") ? sentence : "\(sentence)."
+                
+                guard let audio = self.tts?.generate(text: processedSentence, sid: sid, speed: Float(speed)) else {
+                    DispatchQueue.main.async {
+                        rejecter("GENERATION_ERROR", "Failed to generate audio for sentence: \(processedSentence)", nil)
+                    }
+                    return
+                }
+                
+                // Convert audio samples to base64
+                let sampleCount = Int(audio.n)
+                let data = Data(bytes: audio.samples, count: sampleCount * MemoryLayout<Float>.size)
+                let base64Audio = data.base64EncodedString()
+                
+                // Emit chunk to JavaScript
+                DispatchQueue.main.async {
+                    self.sendEvent(withName: "AudioChunkGenerated", body: [
+                        "chunk": base64Audio,
+                        "index": index,
+                        "total": sentences.count,
+                        "sampleRate": self.tts?.sampleRate() ?? 0
+                    ])
+                }
+            }
+            
+            // Resolve promise when all chunks are generated
+            DispatchQueue.main.async {
+                resolver(["success": true, "totalChunks": sentences.count])
+            }
+        }
     }
 
     /// Splits the input text into sentences with a maximum of `maxWords` words.

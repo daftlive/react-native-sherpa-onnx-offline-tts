@@ -130,89 +130,6 @@ class TTSManagerModule(private val reactContext: ReactApplicationContext) : Reac
         realTimeAudioPlayer?.start()
     }
 
-    // Generate audio and return as base64 string
-    @ReactMethod
-    fun generate(text: String, sid: Int, speed: Double, promise: Promise) {
-        val trimmedText = text.trim()
-        if (trimmedText.isEmpty()) {
-            promise.reject("EMPTY_TEXT", "Input text is empty")
-            return
-        }
-
-        try {
-            println("Generating audio for text with ${trimmedText.split(" ").size} words")
-            
-            // Split the text into manageable sentences
-            val sentences = splitText(trimmedText, 15)
-            println("Split into ${sentences.size} sentences")
-            
-            val allSamplesList = mutableListOf<FloatArray>()
-            var sampleRate: Int = 0
-            var totalSamples = 0
-
-            val startTime = System.currentTimeMillis()
-            
-            for ((index, sentence) in sentences.withIndex()) {
-                val processedSentence = if (sentence.endsWith(".")) sentence else "$sentence."
-                
-                println("Generating chunk ${index + 1}/${sentences.size}: '$processedSentence'")
-                
-                val audio = tts?.generate(processedSentence, sid, speed.toFloat())
-                
-                if (audio == null) {
-                    promise.reject("TTS_ERROR", "TTS generation failed for sentence: $processedSentence")
-                    return
-                }
-                
-                if (sampleRate == 0) {
-                    sampleRate = audio.sampleRate
-                }
-                
-                println("Generated ${audio.samples.size} samples at ${sampleRate}Hz")
-                
-                // Store FloatArray directly instead of converting to List
-                allSamplesList.add(audio.samples)
-                totalSamples += audio.samples.size
-            }
-            
-            val endTime = System.currentTimeMillis()
-            val generationTime = (endTime - startTime) / 1000.0
-            println("Total samples: $totalSamples at ${sampleRate}Hz")
-            println("Duration: ${totalSamples.toFloat() / sampleRate} seconds")
-            println("Generation time: $generationTime seconds")
-
-            // Concatenate all FloatArrays efficiently
-            val allSamples = FloatArray(totalSamples)
-            var offset = 0
-            for (chunk in allSamplesList) {
-                System.arraycopy(chunk, 0, allSamples, offset, chunk.size)
-                offset += chunk.size
-            }
-
-            // Convert float array to byte array
-            val byteBuffer = java.nio.ByteBuffer.allocate(allSamples.size * 4)
-            byteBuffer.order(java.nio.ByteOrder.LITTLE_ENDIAN)
-            for (sample in allSamples) {
-                byteBuffer.putFloat(sample)
-            }
-            val audioBytes = byteBuffer.array()
-            
-            // Convert to base64
-            val base64String = android.util.Base64.encodeToString(audioBytes, android.util.Base64.NO_WRAP)
-            println("Base64 size: ${base64String.length} chars")
-
-            val result = Arguments.createMap()
-            result.putString("audioData", base64String)
-            result.putInt("sampleRate", sampleRate)
-
-            promise.resolve(result)
-        } catch (e: Exception) {
-            println("Generation error: ${e.message}")
-            e.printStackTrace()
-            promise.reject("GENERATION_ERROR", "Error during audio generation: ${e.message}")
-        }
-    }
-
     // Generate and Play method exposed to React Native
     @ReactMethod
     fun generateAndPlay(text: String, sid: Int, speed: Double, promise: Promise) {
@@ -233,6 +150,63 @@ class TTSManagerModule(private val reactContext: ReactApplicationContext) : Reac
             } catch (e: Exception) {
                 promise.reject("GENERATION_ERROR", "Error during audio generation: ${e.message}")
             }
+    }
+
+    // Generate audio without playing - emits chunks progressively
+    @ReactMethod
+    fun generate(text: String, sid: Int, speed: Double, promise: Promise) {
+        val trimmedText = text.trim()
+        if (trimmedText.isEmpty()) {
+            promise.reject("EMPTY_TEXT", "Input text is empty")
+            return
+        }
+
+        val sentences = splitText(trimmedText, 15)
+        
+        thread {
+            try {
+                for ((index, sentence) in sentences.withIndex()) {
+                    val processedSentence = if (sentence.endsWith(".")) sentence else "$sentence."
+                    val audio = tts?.generate(processedSentence, sid, speed.toFloat())
+
+                    if (audio == null) {
+                        promise.reject("GENERATION_ERROR", "Failed to generate audio for sentence: $processedSentence")
+                        return@thread
+                    }
+
+                    // Convert audio samples to base64
+                    val byteArray = FloatArray(audio.samples.size)
+                    for (i in audio.samples.indices) {
+                        byteArray[i] = audio.samples[i]
+                    }
+                    val base64Audio = android.util.Base64.encodeToString(
+                        floatArrayToByteArray(byteArray),
+                        android.util.Base64.NO_WRAP
+                    )
+
+                    // Emit chunk to JavaScript
+                    if (reactContext.hasActiveCatalystInstance()) {
+                        val params = Arguments.createMap().apply {
+                            putString("chunk", base64Audio)
+                            putInt("index", index)
+                            putInt("total", sentences.size)
+                            putInt("sampleRate", audio.sampleRate)
+                        }
+                        reactContext
+                            .getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter::class.java)
+                            .emit("AudioChunkGenerated", params)
+                    }
+                }
+
+                // Resolve promise when all chunks are generated
+                promise.resolve(Arguments.createMap().apply {
+                    putBoolean("success", true)
+                    putInt("totalChunks", sentences.size)
+                })
+            } catch (e: Exception) {
+                promise.reject("GENERATION_ERROR", "Error during audio generation: ${e.message}")
+            }
+        }
     }
 
     // Deinitialize method exposed to React Native
@@ -304,5 +278,15 @@ class TTSManagerModule(private val reactContext: ReactApplicationContext) : Reac
                 .getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter::class.java)
                 .emit("VolumeUpdate", params)
         }
+    }
+
+    private fun floatArrayToByteArray(floatArray: FloatArray): ByteArray {
+        val byteArray = ByteArray(floatArray.size * 4)
+        val buffer = java.nio.ByteBuffer.wrap(byteArray)
+        buffer.order(java.nio.ByteOrder.LITTLE_ENDIAN)
+        for (f in floatArray) {
+            buffer.putFloat(f)
+        }
+        return byteArray
     }
 }
