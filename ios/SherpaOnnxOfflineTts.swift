@@ -50,7 +50,7 @@ class TTSManager: RCTEventEmitter, AudioPlayerDelegate {
         // Split the text into manageable sentences
         let sentences = splitText(trimmedText, maxWords: 15)
         var allSamples: [Float] = []
-        var sampleRate: Int = 0
+        var sampleRate: Int32 = 0
         
         for sentence in sentences {
             let processedSentence = sentence.hasSuffix(".") ? sentence : "\(sentence)."
@@ -74,7 +74,7 @@ class TTSManager: RCTEventEmitter, AudioPlayerDelegate {
         
         let result: [String: Any] = [
             "audioData": base64String,
-            "sampleRate": sampleRate
+            "sampleRate": Int(sampleRate)
         ]
         
         resolver(result)

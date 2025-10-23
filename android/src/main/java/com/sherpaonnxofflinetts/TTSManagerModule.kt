@@ -143,7 +143,7 @@ class TTSManagerModule(private val reactContext: ReactApplicationContext) : Reac
             // Split the text into manageable sentences
             val sentences = splitText(trimmedText, 15)
             val allSamples = mutableListOf<Float>()
-            var sampleRate = 0
+            var sampleRate: Int = 0
 
             val startTime = System.currentTimeMillis()
             
@@ -185,4 +185,54 @@ class TTSManagerModule(private val reactContext: ReactApplicationContext) : Reac
             result.putInt("sampleRate", sampleRate)
 
             promise.resolve(result)
-        } catch
+        } catch (e: Exception) {
+            promise.reject("GENERATION_ERROR", "Error during audio generation: ${e.message}")
+        }
+    }
+
+    private fun sendVolumeUpdate(volume: Float) {
+        // Send volume update to JavaScript side
+        val params = WritableNativeMap()
+        params.putDouble("volume", volume.toDouble())
+        reactContext
+            .getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter::class.java)
+            .emit("VolumeDidUpdate", params)
+    }
+
+    // Clean up resources
+    @ReactMethod
+    fun dispose() {
+        // Release TTS resources
+        tts?.dispose()
+        tts = null
+
+        // Stop and release audio player
+        realTimeAudioPlayer?.stop()
+        realTimeAudioPlayer = null
+    }
+
+    // Helper function to split text into smaller chunks
+    private fun splitText(text: String, maxLength: Int): List<String> {
+        val sentences = mutableListOf<String>()
+        var currentSentence = StringBuilder()
+
+        for (word in text.split(" ")) {
+            if (currentSentence.length + word.length + 1 > maxLength) {
+                sentences.add(currentSentence.toString())
+                currentSentence = StringBuilder(word)
+            } else {
+                if (currentSentence.isNotEmpty()) {
+                    currentSentence.append(" ")
+                }
+                currentSentence.append(word)
+            }
+        }
+
+        // Add the last sentence if not empty
+        if (currentSentence.isNotEmpty()) {
+            sentences.add(currentSentence.toString())
+        }
+
+        return sentences
+    }
+}
