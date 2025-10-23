@@ -174,14 +174,14 @@ class TTSManagerModule(private val reactContext: ReactApplicationContext) : Reac
                         return@thread
                     }
 
-                    // *** CORREGIDO: Convertir correctamente FloatArray a bytes ***
-                    val samples = audio.samples
-                    
-                    // Trim silence at the end (especialmente importante para el último chunk)
+                    // Get samples array
+                    var samples = audio.samples
                     var actualLength = samples.size
-                    val silenceThreshold = 0.01f
                     
+                    // *** Trim silence at the end (only for last chunk) ***
                     if (index == sentences.size - 1) {
+                        val silenceThreshold = 0.01f
+                        
                         // Find last non-silent sample
                         for (i in samples.size - 1 downTo 0) {
                             if (kotlin.math.abs(samples[i]) > silenceThreshold) {
@@ -195,19 +195,21 @@ class TTSManagerModule(private val reactContext: ReactApplicationContext) : Reac
                         actualLength = kotlin.math.min(actualLength + bufferSamples, samples.size)
                         
                         android.util.Log.d("TTSManager", "Trimmed last chunk from ${samples.size} to $actualLength samples")
+                        
+                        // Create new array with trimmed length
+                        samples = samples.copyOf(actualLength)
                     }
 
-                    // Convert only actualLength samples to bytes (Little Endian)
-                    val byteBuffer = java.nio.ByteBuffer.allocate(actualLength * 4)
+                    // Convert FloatArray to bytes (Little Endian)
+                    val byteBuffer = java.nio.ByteBuffer.allocate(samples.size * 4)
                     byteBuffer.order(java.nio.ByteOrder.LITTLE_ENDIAN)
                     
-                    for (i in 0 until actualLength) {
-                        byteBuffer.putFloat(samples[i])
+                    for (sample in samples) {
+                        byteBuffer.putFloat(sample)
                     }
                     
-                    val byteArray = byteBuffer.array()
                     val base64Audio = android.util.Base64.encodeToString(
-                        byteArray,
+                        byteBuffer.array(),
                         android.util.Base64.NO_WRAP
                     )
 

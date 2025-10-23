@@ -85,31 +85,34 @@ class TTSManager: RCTEventEmitter, AudioPlayerDelegate {
                     return
                 }
                 
-                // Get sample count and pointer
+                // Get sample count and samples array (no unwrap needed)
                 var sampleCount = Int(audio.n)
-                let samplesPtr = audio.samples
+                let samples = audio.samples
                 
-                // *** NUEVO: Trim silence at the end for last chunk ***
+                // *** Trim silence at the end for last chunk ***
                 if index == sentences.count - 1 {
                     let silenceThreshold: Float = 0.01
                     
                     // Find last non-silent sample
                     for i in stride(from: sampleCount - 1, through: 0, by: -1) {
-                        if abs(samplesPtr![i]) > silenceThreshold {
+                        if abs(samples[i]) > silenceThreshold {
                             sampleCount = i + 1
                             break
                         }
                     }
                     
                     // Add small buffer (~10ms)
-                    let bufferSamples = Int(Double(self.tts?.sampleRate() ?? 22050) * 0.01)
+                    let bufferSamples = Int(self.sampleRate * 0.01)
                     sampleCount = min(sampleCount + bufferSamples, Int(audio.n))
                     
                     print("Trimmed last chunk from \(audio.n) to \(sampleCount) samples")
                 }
                 
-                // Convert to Data using correct byte order (Little Endian)
-                let data = Data(bytes: samplesPtr!, count: sampleCount * MemoryLayout<Float>.size)
+                // Convert only the needed samples to Data
+                // Use withUnsafeBytes for proper Little Endian conversion
+                let data = samples.prefix(sampleCount).withUnsafeBytes { bufferPointer in
+                    Data(bufferPointer)
+                }
                 let base64Audio = data.base64EncodedString()
                 
                 // Emit chunk to JavaScript
@@ -118,7 +121,7 @@ class TTSManager: RCTEventEmitter, AudioPlayerDelegate {
                         "chunk": base64Audio,
                         "index": index,
                         "total": sentences.count,
-                        "sampleRate": Int(self.sampleRate) // Use stored sample rate
+                        "sampleRate": Int(self.sampleRate)
                     ])
                 }
             }
