@@ -13,6 +13,7 @@ protocol AudioPlayerDelegate: AnyObject {
 class TTSManager: RCTEventEmitter, AudioPlayerDelegate {
     private var tts: SherpaOnnxOfflineTtsWrapper?
     private var realTimeAudioPlayer: AudioPlayer?
+    private var sampleRate: Double = 22050 // Store sample rate
     
     override init() {
         super.init()
@@ -32,6 +33,7 @@ class TTSManager: RCTEventEmitter, AudioPlayerDelegate {
     // Initialize TTS and Audio Player
     @objc(initializeTTS:channels:modelId:)
     func initializeTTS(_ sampleRate: Double, channels: Int, modelId: String) {
+        self.sampleRate = sampleRate // Store for later use
         self.realTimeAudioPlayer = AudioPlayer(sampleRate: sampleRate, channels: AVAudioChannelCount(channels))
         self.realTimeAudioPlayer?.delegate = self // Set delegate to receive volume updates
         self.tts = createOfflineTts(modelId: modelId)
@@ -116,7 +118,7 @@ class TTSManager: RCTEventEmitter, AudioPlayerDelegate {
                         "chunk": base64Audio,
                         "index": index,
                         "total": sentences.count,
-                        "sampleRate": self.tts?.sampleRate() ?? 0
+                        "sampleRate": Int(self.sampleRate) // Use stored sample rate
                     ])
                 }
             }
