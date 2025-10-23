@@ -85,37 +85,69 @@ class TTSManager: RCTEventEmitter, AudioPlayerDelegate {
                     return
                 }
                 
-                // Get sample count and samples array (no unwrap needed)
-                var sampleCount = Int(audio.n)
-                let samples = audio.samples
+                var samples = audio.samples
+                var sampleCount = samples.count
                 
-                // *** Trim silence at the end for last chunk ***
-                if index == sentences.count - 1 {
-                    let silenceThreshold: Float = 0.01
+                // *** TRIM ULTRA-AGRESIVO ***
+                let silenceThreshold: Float = 0.002 // Threshold muy bajo
+                
+                // Primera pasada: encontrar el último sample significativo
+                var foundSignificantAudio = false
+                for i in stride(from: sampleCount - 1, through: 0, by: -1) {
+                    if abs(samples[i]) > silenceThreshold {
+                        sampleCount = i + 1
+                        foundSignificantAudio = true
+                        break
+                    }
+                }
+                
+                print("First pass trim: \(samples.count) → \(sampleCount) samples")
+                
+                // Segunda pasada ULTRA-AGRESIVA para el último chunk
+                if index == sentences.count - 1 && foundSignificantAudio {
+                    // Buscar hacia atrás con threshold más alto
+                    let aggressiveThreshold: Float = 0.008
+                    var aggressiveTrimPoint = sampleCount
                     
-                    // Find last non-silent sample
-                    for i in stride(from: sampleCount - 1, through: 0, by: -1) {
-                        if abs(samples[i]) > silenceThreshold {
-                            sampleCount = i + 1
+                    for i in stride(from: sampleCount - 1, through: max(0, sampleCount - 500), by: -1) {
+                        if abs(samples[i]) > aggressiveThreshold {
+                            aggressiveTrimPoint = i + 1
                             break
                         }
                     }
                     
-                    // Add small buffer (~10ms)
-                    let bufferSamples = Int(self.sampleRate * 0.01)
-                    sampleCount = min(sampleCount + bufferSamples, Int(audio.n))
+                    sampleCount = aggressiveTrimPoint
+                    print("Aggressive trim for last chunk: → \(sampleCount) samples")
                     
-                    print("Trimmed last chunk from \(audio.n) to \(sampleCount) samples")
+                    // Buffer ultra-mínimo (2ms)
+                    let bufferSamples = Int(self.sampleRate * 0.002)
+                    sampleCount = min(sampleCount + bufferSamples, samples.count)
+                } else {
+                    // Chunks intermedios: buffer de 8ms
+                    let bufferSamples = Int(self.sampleRate * 0.008)
+                    sampleCount = min(sampleCount + bufferSamples, samples.count)
                 }
                 
-                // Convert only the needed samples to Data
-                // Use withUnsafeBytes for proper Little Endian conversion
-                let data = samples.prefix(sampleCount).withUnsafeBytes { bufferPointer in
+                print("Final sample count for chunk \(index + 1): \(sampleCount)")
+                
+                // LOG: Mostrar los últimos 20 samples ANTES del trim
+                let last20Before = samples.suffix(20).map { String(format: "%.6f", $0) }.joined(separator: ", ")
+                print("Last 20 samples BEFORE trim: [\(last20Before)]")
+                
+                // Aplicar el trim
+                samples = Array(samples.prefix(sampleCount))
+                
+                // LOG: Mostrar los últimos 20 samples DESPUÉS del trim
+                let last20After = samples.suffix(20).map { String(format: "%.6f", $0) }.joined(separator: ", ")
+                print("Last 20 samples AFTER trim: [\(last20After)]")
+                
+                // Convert to Data
+                let data = samples.withUnsafeBytes { bufferPointer in
                     Data(bufferPointer)
                 }
                 let base64Audio = data.base64EncodedString()
                 
-                // Emit chunk to JavaScript
+                // Emit chunk
                 DispatchQueue.main.async {
                     self.sendEvent(withName: "AudioChunkGenerated", body: [
                         "chunk": base64Audio,
@@ -126,7 +158,6 @@ class TTSManager: RCTEventEmitter, AudioPlayerDelegate {
                 }
             }
             
-            // Resolve promise when all chunks are generated
             DispatchQueue.main.async {
                 resolver(["success": true, "totalChunks": sentences.count])
             }
