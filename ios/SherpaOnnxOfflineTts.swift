@@ -47,20 +47,34 @@ class TTSManager: RCTEventEmitter, AudioPlayerDelegate {
             return
         }
         
-        let processedText = trimmedText.hasSuffix(".") ? trimmedText : "\(trimmedText)."
+        // Split the text into manageable sentences
+        let sentences = splitText(trimmedText, maxWords: 15)
+        var allSamples: [Float] = []
+        var sampleRate: Int = 0
         
-        guard let audio = tts?.generate(text: processedText, sid: sid, speed: Float(speed)) else {
-            rejecter("TTS_ERROR", "TTS was never initialised", nil)
-            return
+        for sentence in sentences {
+            let processedSentence = sentence.hasSuffix(".") ? sentence : "\(sentence)."
+            
+            guard let audio = tts?.generate(text: processedSentence, sid: sid, speed: Float(speed)) else {
+                rejecter("TTS_ERROR", "TTS generation failed", nil)
+                return
+            }
+            
+            if sampleRate == 0 {
+                sampleRate = audio.sampleRate
+            }
+            
+            // Append samples from this chunk
+            allSamples.append(contentsOf: audio.samples)
         }
         
-        // Convert audio samples to Data
-        let audioData = Data(bytes: audio.samples, count: audio.samples.count * MemoryLayout<Float>.size)
+        // Convert combined audio samples to Data
+        let audioData = Data(bytes: allSamples, count: allSamples.count * MemoryLayout<Float>.size)
         let base64String = audioData.base64EncodedString()
         
         let result: [String: Any] = [
             "audioData": base64String,
-            "sampleRate": audio.sampleRate
+            "sampleRate": sampleRate
         ]
         
         resolver(result)

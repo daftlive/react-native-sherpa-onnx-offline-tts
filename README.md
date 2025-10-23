@@ -85,8 +85,8 @@ async function sayHello() {
 | Method | Signature | Description |
 |--------|-----------|-------------|
 | **initialize** | `(modelConfigJson: string): Promise<void>` | Must be called once before any synthesis. Pass a JSON string with `modelPath`, `tokensPath`, `dataDirPath`. |
-| **generate** | `(text: string, speakerId: number, speed: number): Promise<{ audioData: string, sampleRate: number }>` | Generates speech and returns an object with base64 encoded audio data and sample rate. |
-| **generateAndPlay** | `(text: string, speakerId: number, speed: number): Promise<void>` | Generates speech and streams it to the device speaker. |
+| **generate** | `(text: string, speakerId: number, speed: number): Promise<{ audioData: string, sampleRate: number }>` | Generates speech and returns an object with base64 encoded audio data and sample rate. Automatically splits long texts into chunks. |
+| **generateAndPlay** | `(text: string, speakerId: number, speed: number): Promise<void>` | Generates speech and streams it to the device speaker. Automatically splits long texts into chunks. |
 | **stopPlaying** | `(): void` | Immediately stops playback. |
 | **addVolumeListener** | `(cb: (volume: number) => void): EmitterSubscription` | Subscribes to real‑time RMS volume callbacks during playback. Call `subscription.remove()` to unsubscribe. |
 | **deinitialize** | `(): void` | Frees native resources – call this when your app unmounts or goes to background for a long time. |
