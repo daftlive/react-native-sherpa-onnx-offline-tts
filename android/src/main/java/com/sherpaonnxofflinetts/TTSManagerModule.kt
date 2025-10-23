@@ -174,13 +174,40 @@ class TTSManagerModule(private val reactContext: ReactApplicationContext) : Reac
                         return@thread
                     }
 
-                    // Convert audio samples to base64
-                    val byteArray = FloatArray(audio.samples.size)
-                    for (i in audio.samples.indices) {
-                        byteArray[i] = audio.samples[i]
+                    // *** CORREGIDO: Convertir correctamente FloatArray a bytes ***
+                    val samples = audio.samples
+                    
+                    // Trim silence at the end (especialmente importante para el último chunk)
+                    var actualLength = samples.size
+                    val silenceThreshold = 0.01f
+                    
+                    if (index == sentences.size - 1) {
+                        // Find last non-silent sample
+                        for (i in samples.size - 1 downTo 0) {
+                            if (kotlin.math.abs(samples[i]) > silenceThreshold) {
+                                actualLength = i + 1
+                                break
+                            }
+                        }
+                        
+                        // Add small buffer (~10ms)
+                        val bufferSamples = (audio.sampleRate * 0.01f).toInt()
+                        actualLength = kotlin.math.min(actualLength + bufferSamples, samples.size)
+                        
+                        android.util.Log.d("TTSManager", "Trimmed last chunk from ${samples.size} to $actualLength samples")
                     }
+
+                    // Convert only actualLength samples to bytes (Little Endian)
+                    val byteBuffer = java.nio.ByteBuffer.allocate(actualLength * 4)
+                    byteBuffer.order(java.nio.ByteOrder.LITTLE_ENDIAN)
+                    
+                    for (i in 0 until actualLength) {
+                        byteBuffer.putFloat(samples[i])
+                    }
+                    
+                    val byteArray = byteBuffer.array()
                     val base64Audio = android.util.Base64.encodeToString(
-                        floatArrayToByteArray(byteArray),
+                        byteArray,
                         android.util.Base64.NO_WRAP
                     )
 
@@ -278,15 +305,5 @@ class TTSManagerModule(private val reactContext: ReactApplicationContext) : Reac
                 .getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter::class.java)
                 .emit("VolumeUpdate", params)
         }
-    }
-
-    private fun floatArrayToByteArray(floatArray: FloatArray): ByteArray {
-        val byteArray = ByteArray(floatArray.size * 4)
-        val buffer = java.nio.ByteBuffer.wrap(byteArray)
-        buffer.order(java.nio.ByteOrder.LITTLE_ENDIAN)
-        for (f in floatArray) {
-            buffer.putFloat(f)
-        }
-        return byteArray
     }
 }

@@ -68,7 +68,6 @@ class TTSManager: RCTEventEmitter, AudioPlayerDelegate {
             return
         }
         
-        // Split the text into manageable sentences
         let sentences = splitText(trimmedText, maxWords: 15)
         
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
@@ -84,9 +83,31 @@ class TTSManager: RCTEventEmitter, AudioPlayerDelegate {
                     return
                 }
                 
-                // Convert audio samples to base64
-                let sampleCount = Int(audio.n)
-                let data = Data(bytes: audio.samples, count: sampleCount * MemoryLayout<Float>.size)
+                // Get sample count and pointer
+                var sampleCount = Int(audio.n)
+                let samplesPtr = audio.samples
+                
+                // *** NUEVO: Trim silence at the end for last chunk ***
+                if index == sentences.count - 1 {
+                    let silenceThreshold: Float = 0.01
+                    
+                    // Find last non-silent sample
+                    for i in stride(from: sampleCount - 1, through: 0, by: -1) {
+                        if abs(samplesPtr![i]) > silenceThreshold {
+                            sampleCount = i + 1
+                            break
+                        }
+                    }
+                    
+                    // Add small buffer (~10ms)
+                    let bufferSamples = Int(Double(self.tts?.sampleRate() ?? 22050) * 0.01)
+                    sampleCount = min(sampleCount + bufferSamples, Int(audio.n))
+                    
+                    print("Trimmed last chunk from \(audio.n) to \(sampleCount) samples")
+                }
+                
+                // Convert to Data using correct byte order (Little Endian)
+                let data = Data(bytes: samplesPtr!, count: sampleCount * MemoryLayout<Float>.size)
                 let base64Audio = data.base64EncodedString()
                 
                 // Emit chunk to JavaScript
