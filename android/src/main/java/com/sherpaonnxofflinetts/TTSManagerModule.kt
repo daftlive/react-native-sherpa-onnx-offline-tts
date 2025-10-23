@@ -140,15 +140,22 @@ class TTSManagerModule(private val reactContext: ReactApplicationContext) : Reac
         }
 
         try {
+            println("Generating audio for text with ${trimmedText.split(" ").size} words")
+            
             // Split the text into manageable sentences
             val sentences = splitText(trimmedText, 15)
-            val allSamples = mutableListOf<Float>()
+            println("Split into ${sentences.size} sentences")
+            
+            val allSamplesList = mutableListOf<FloatArray>()
             var sampleRate: Int = 0
+            var totalSamples = 0
 
             val startTime = System.currentTimeMillis()
             
-            for (sentence in sentences) {
+            for ((index, sentence) in sentences.withIndex()) {
                 val processedSentence = if (sentence.endsWith(".")) sentence else "$sentence."
+                
+                println("Generating chunk ${index + 1}/${sentences.size}: '$processedSentence'")
                 
                 val audio = tts?.generate(processedSentence, sid, speed.toFloat())
                 
@@ -161,13 +168,26 @@ class TTSManagerModule(private val reactContext: ReactApplicationContext) : Reac
                     sampleRate = audio.sampleRate
                 }
                 
-                // Append samples from this chunk
-                allSamples.addAll(audio.samples.toList())
+                println("Generated ${audio.samples.size} samples at ${sampleRate}Hz")
+                
+                // Store FloatArray directly instead of converting to List
+                allSamplesList.add(audio.samples)
+                totalSamples += audio.samples.size
             }
             
             val endTime = System.currentTimeMillis()
             val generationTime = (endTime - startTime) / 1000.0
-            println("Time taken for TTS generation: $generationTime seconds")
+            println("Total samples: $totalSamples at ${sampleRate}Hz")
+            println("Duration: ${totalSamples.toFloat() / sampleRate} seconds")
+            println("Generation time: $generationTime seconds")
+
+            // Concatenate all FloatArrays efficiently
+            val allSamples = FloatArray(totalSamples)
+            var offset = 0
+            for (chunk in allSamplesList) {
+                System.arraycopy(chunk, 0, allSamples, offset, chunk.size)
+                offset += chunk.size
+            }
 
             // Convert float array to byte array
             val byteBuffer = java.nio.ByteBuffer.allocate(allSamples.size * 4)
@@ -179,6 +199,7 @@ class TTSManagerModule(private val reactContext: ReactApplicationContext) : Reac
             
             // Convert to base64
             val base64String = android.util.Base64.encodeToString(audioBytes, android.util.Base64.NO_WRAP)
+            println("Base64 size: ${base64String.length} chars")
 
             val result = Arguments.createMap()
             result.putString("audioData", base64String)
@@ -186,53 +207,102 @@ class TTSManagerModule(private val reactContext: ReactApplicationContext) : Reac
 
             promise.resolve(result)
         } catch (e: Exception) {
+            println("Generation error: ${e.message}")
+            e.printStackTrace()
             promise.reject("GENERATION_ERROR", "Error during audio generation: ${e.message}")
         }
     }
 
-    private fun sendVolumeUpdate(volume: Float) {
-        // Send volume update to JavaScript side
-        val params = WritableNativeMap()
-        params.putDouble("volume", volume.toDouble())
-        reactContext
-            .getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter::class.java)
-            .emit("VolumeDidUpdate", params)
-    }
-
-    // Clean up resources
+    // Generate and Play method exposed to React Native
     @ReactMethod
-    fun dispose() {
-        // Release TTS resources
-        tts?.dispose()
-        tts = null
+    fun generateAndPlay(text: String, sid: Int, speed: Double, promise: Promise) {
+        val trimmedText = text.trim()
+        if (trimmedText.isEmpty()) {
+            promise.reject("EMPTY_TEXT", "Input text is empty")
+            return
+        }
 
-        // Stop and release audio player
-        realTimeAudioPlayer?.stop()
-        realTimeAudioPlayer = null
+        val sentences = splitText(trimmedText, 15)
+            try {
+                for (sentence in sentences) {
+                    val processedSentence = if (sentence.endsWith(".")) sentence else "$sentence."
+                    generateAudio(processedSentence, sid, speed.toFloat())
+                }
+                // Once done generating and enqueueing all audio, resolve the promise
+                promise.resolve("Audio generated and played successfully")
+            } catch (e: Exception) {
+                promise.reject("GENERATION_ERROR", "Error during audio generation: ${e.message}")
+            }
     }
 
-    // Helper function to split text into smaller chunks
-    private fun splitText(text: String, maxLength: Int): List<String> {
-        val sentences = mutableListOf<String>()
-        var currentSentence = StringBuilder()
+    // Deinitialize method exposed to React Native
+    @ReactMethod
+    fun deinitialize() {
+        realTimeAudioPlayer?.stopPlayer()
+        realTimeAudioPlayer = null
+        tts?.release()
+        tts = null
+    }
 
-        for (word in text.split(" ")) {
-            if (currentSentence.length + word.length + 1 > maxLength) {
-                sentences.add(currentSentence.toString())
-                currentSentence = StringBuilder(word)
-            } else {
-                if (currentSentence.isNotEmpty()) {
-                    currentSentence.append(" ")
+    // Helper: split text into manageable chunks similar to iOS logic
+    private fun splitText(text: String, maxWords: Int): List<String> {
+        val sentences = mutableListOf<String>()
+        val words = text.split("\\s+".toRegex()).filter { it.isNotEmpty() }
+        var currentIndex = 0
+        val totalWords = words.size
+
+        while (currentIndex < totalWords) {
+            val endIndex = (currentIndex + maxWords).coerceAtMost(totalWords)
+            var chunk = words.subList(currentIndex, endIndex).joinToString(" ")
+
+            val lastPeriod = chunk.lastIndexOf('.')
+            val lastComma = chunk.lastIndexOf(',')
+
+            when {
+                lastPeriod != -1 -> {
+                    val sentence = chunk.substring(0, lastPeriod + 1).trim()
+                    sentences.add(sentence)
+                    currentIndex += sentence.split("\\s+".toRegex()).size
                 }
-                currentSentence.append(word)
+                lastComma != -1 -> {
+                    val sentence = chunk.substring(0, lastComma + 1).trim()
+                    sentences.add(sentence)
+                    currentIndex += sentence.split("\\s+".toRegex()).size
+                }
+                else -> {
+                    sentences.add(chunk.trim())
+                    currentIndex += maxWords
+                }
             }
         }
 
-        // Add the last sentence if not empty
-        if (currentSentence.isNotEmpty()) {
-            sentences.add(currentSentence.toString())
-        }
-
         return sentences
+    }
+
+    private fun generateAudio(text: String, sid: Int, speed: Float) {
+        val startTime = System.currentTimeMillis()
+        val audio = tts?.generate(text, sid, speed)
+        val endTime = System.currentTimeMillis()
+        val generationTime = (endTime - startTime) / 1000.0
+        println("Time taken for TTS generation: $generationTime seconds")
+
+        if (audio == null) {
+            println("Error: TTS was never initialized or audio generation failed")
+            return
+        }
+        realTimeAudioPlayer?.enqueueAudioData(audio.samples, audio.sampleRate)
+    }
+
+    private fun sendVolumeUpdate(volume: Float) {
+        // Emit the volume to JavaScript
+        if (reactContext.hasActiveCatalystInstance()) {
+            val params = Arguments.createMap()
+            
+            params.putDouble("volume", volume.toDouble())
+            println("kislaytest: Volume Update: $volume")
+            reactContext
+                .getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter::class.java)
+                .emit("VolumeUpdate", params)
+        }
     }
 }

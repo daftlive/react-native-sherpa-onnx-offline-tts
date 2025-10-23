@@ -47,16 +47,22 @@ class TTSManager: RCTEventEmitter, AudioPlayerDelegate {
             return
         }
         
+        print("Generating audio for text with \(trimmedText.split(separator: " ").count) words")
+        
         // Split the text into manageable sentences
         let sentences = splitText(trimmedText, maxWords: 15)
+        print("Split into \(sentences.count) sentences")
+        
         var allSamples: [Float] = []
         var sampleRate: Int32 = 0
         
-        for sentence in sentences {
+        for (index, sentence) in sentences.enumerated() {
             let processedSentence = sentence.hasSuffix(".") ? sentence : "\(sentence)."
             
+            print("Generating chunk \(index + 1)/\(sentences.count): '\(processedSentence)'")
+            
             guard let audio = tts?.generate(text: processedSentence, sid: sid, speed: Float(speed)) else {
-                rejecter("TTS_ERROR", "TTS generation failed", nil)
+                rejecter("TTS_ERROR", "TTS generation failed for sentence: \(processedSentence)", nil)
                 return
             }
             
@@ -64,13 +70,24 @@ class TTSManager: RCTEventEmitter, AudioPlayerDelegate {
                 sampleRate = audio.sampleRate
             }
             
-            // Append samples from this chunk
-            allSamples.append(contentsOf: audio.samples)
+            let samplesCount = Int(audio.n)
+            print("Generated \(samplesCount) samples at \(sampleRate)Hz")
+            
+            // Create array from pointer without extra copying
+            let samplesArray = Array(UnsafeBufferPointer(start: audio.samples, count: samplesCount))
+            allSamples.append(contentsOf: samplesArray)
         }
         
-        // Convert combined audio samples to Data
-        let audioData = Data(bytes: allSamples, count: allSamples.count * MemoryLayout<Float>.size)
+        print("Total samples: \(allSamples.count) at \(sampleRate)Hz")
+        print("Duration: \(Float(allSamples.count) / Float(sampleRate)) seconds")
+        
+        // Convert combined audio samples to Data - use withUnsafeBytes for efficiency
+        let audioData = allSamples.withUnsafeBytes { bytes in
+            Data(bytes: bytes.baseAddress!, count: bytes.count)
+        }
         let base64String = audioData.base64EncodedString()
+        
+        print("Base64 size: \(base64String.count) chars")
         
         let result: [String: Any] = [
             "audioData": base64String,
