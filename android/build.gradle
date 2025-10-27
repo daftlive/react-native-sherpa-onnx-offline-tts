@@ -1,6 +1,8 @@
 buildscript {
   // Buildscript is evaluated before everything else so we can't use getExtOrDefault
-  def kotlin_version = rootProject.ext.has("kotlinVersion") ? rootProject.ext.get("kotlinVersion") : project.properties["SherpaOnnxOfflineTts_kotlinVersion"]
+  def kotlin_version = rootProject.ext.has("kotlinVersion") ?
+      rootProject.ext.get("kotlinVersion") :
+      project.properties["SherpaOnnxOfflineTts_kotlinVersion"]
 
   repositories {
     google()
@@ -31,18 +33,21 @@ if (isNewArchitectureEnabled()) {
 }
 
 def getExtOrDefault(name) {
-  return rootProject.ext.has(name) ? rootProject.ext.get(name) : project.properties["SherpaOnnxOfflineTts_" + name]
+  return rootProject.ext.has(name)
+      ? rootProject.ext.get(name)
+      : project.properties["SherpaOnnxOfflineTts_" + name]
 }
 
 def getExtOrIntegerDefault(name) {
-  return rootProject.ext.has(name) ? rootProject.ext.get(name) : (project.properties["SherpaOnnxOfflineTts_" + name]).toInteger()
+  return rootProject.ext.has(name)
+      ? rootProject.ext.get(name)
+      : (project.properties["SherpaOnnxOfflineTts_" + name]).toInteger()
 }
 
 def supportsNamespace() {
   def parsed = com.android.Version.ANDROID_GRADLE_PLUGIN_VERSION.tokenize('.')
   def major = parsed[0].toInteger()
   def minor = parsed[1].toInteger()
-
   // Namespace support was added in 7.3.0
   return (major == 7 && minor >= 3) || major >= 8
 }
@@ -50,7 +55,6 @@ def supportsNamespace() {
 android {
   if (supportsNamespace()) {
     namespace "com.sherpaonnxofflinetts"
-
     sourceSets {
       main {
         manifest.srcFile "src/main/AndroidManifestNew.xml"
@@ -64,7 +68,6 @@ android {
   defaultConfig {
     minSdkVersion getExtOrIntegerDefault("minSdkVersion")
     targetSdkVersion getExtOrIntegerDefault("targetSdkVersion")
-
   }
 
   buildTypes {
@@ -81,30 +84,30 @@ android {
     sourceCompatibility JavaVersion.VERSION_1_8
     targetCompatibility JavaVersion.VERSION_1_8
   }
+
+  packagingOptions {
+    pickFirst "lib/**/libonnxruntime.so"
+    pickFirst "lib/**/libc++_shared.so"
+  }
 }
 
 repositories {
-  mavenCentral()
   google()
+  mavenCentral()
+  // 🔹 Permite usar el AAR local sin romper builds AAR/AGP8+
   flatDir {
-        dirs 'libs' // Specifies the 'libs' directory for local AARs
-    }
+    dirs 'libs'
+  }
 }
 
 def kotlin_version = getExtOrDefault("kotlinVersion")
 
-// compileOnly files('libs/sherpa-onnx-1.10.35.aar')
-
 dependencies {
-  // For < 0.71, this will be from the local maven repo
-  // For > 0.71, this will be replaced by `com.facebook.react:react-android:$version` by react gradle plugin
-  //noinspection GradleDynamicVersion
-  implementation "com.facebook.react:react-native:0.75.3"
+  // React Native base
+  implementation "com.facebook.react:react-native:+"
   implementation "org.jetbrains.kotlin:kotlin-stdlib:$kotlin_version"
-  implementation files('libs/sherpa-onnx-1.10.35.aar')
-  // compileOnly files('libs/sherpa-onnx-1.10.35.aar')
-  // implementation "com.k2fsa:sherpa-onnx:+"
-  // implementation(name:'sherpa-onnx-1.10.35.aar', ext:'aar')
+
+  // 🔹 Incluye el AAR como binario, no como dependencia directa
+  // Esto evita el error “Direct local .aar file dependencies are not supported…”
+  api files('libs/sherpa-onnx-1.10.35.aar')
 }
-
-
