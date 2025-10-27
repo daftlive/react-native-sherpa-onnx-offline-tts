@@ -891,7 +891,6 @@
     "through": "^2.3.8",
     "through2": "^4.0.2",
     "titleize": "^3.0.0",
-    "tmp": "^0.0.33",
     "tmpl": "^1.0.5",
     "to-fast-properties": "^2.0.0",
     "to-regex-range": "^5.0.1",
