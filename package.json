@@ -5,9 +5,6 @@
   "source": "./src/index.tsx",
   "main": "./lib/commonjs/index.js",
   "module": "./lib/module/index.js",
-  "overrides": {
-    "tmp": "0.2.5"
-  },
   "exports": {
     ".": {
       "import": {
