@@ -85,7 +85,13 @@ android {
     targetCompatibility JavaVersion.VERSION_1_8
   }
 
+  // (opcional pero recomendable) alinear Kotlin/JVM
+  kotlinOptions {
+    jvmTarget = "1.8"
+  }
+
   packagingOptions {
+    // evita choques entre sherpa / onnxruntime / c++ runtime
     pickFirst "lib/**/libonnxruntime.so"
     pickFirst "lib/**/libc++_shared.so"
   }
@@ -94,7 +100,8 @@ android {
 repositories {
   google()
   mavenCentral()
-  // 🔹 Permite usar el AAR local sin romper builds AAR/AGP8+
+
+  // Permite resolver el .aar precompilado que viene en esta lib
   flatDir {
     dirs 'libs'
   }
@@ -103,11 +110,29 @@ repositories {
 def kotlin_version = getExtOrDefault("kotlinVersion")
 
 dependencies {
-  // React Native base
+  // React Native runtime: dejamos + para que use la versión del proyecto padre
   implementation "com.facebook.react:react-native:+"
+
   implementation "org.jetbrains.kotlin:kotlin-stdlib:$kotlin_version"
 
-  // 🔹 Incluye el AAR como binario, no como dependencia directa
-  // Esto evita el error “Direct local .aar file dependencies are not supported…”
+  // Importamos el AAR local como binario embebido
+  // -> esto lo expone aguas arriba (api) en lugar de tratar de reempaquetarlo como AAR interno.
   api files('libs/sherpa-onnx-1.10.35.aar')
+}
+
+/**
+ * WORKAROUND Gradle/AGP 8:
+ * Cuando Gradle intenta crear el AAR de ESTE módulo (bundleDebugAar / bundleReleaseAar),
+ * peta porque AGP no permite dependencias .aar locales dentro de otra librería AAR.
+ * Deshabilitamos esas tareas para que este módulo solo se consuma dentro de la app,
+ * no como AAR publicable. Esto es válido en librerías RN usadas directamente por la app. 
+ * (AGP te avisa de esto explícitamente en el error 'Direct local .aar file dependencies ...'). 
+ * :contentReference[oaicite:3]{index=3}
+ */
+afterEvaluate {
+  tasks.matching { t ->
+    t.name == "bundleDebugAar" || t.name == "bundleReleaseAar"
+  }.configureEach {
+    enabled = false
+  }
 }
