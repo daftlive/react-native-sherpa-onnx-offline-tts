@@ -131,9 +131,9 @@ dependencies {
  */
 // Disable AAR bundling tasks (Gradle 8+ strict mode workaround)
 afterEvaluate {
-    tasks.configureEach { t ->
-        if (t.name.toLowerCase().contains("bundle") && t.name.toLowerCase().contains("aar")) {
-            t.enabled = false
-        }
-    }
+  tasks.matching { t ->
+    t.name == "bundleDebugAar" || t.name == "bundleReleaseAar"
+  }.configureEach {
+    enabled = false
+  }
 }
