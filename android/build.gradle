@@ -129,10 +129,11 @@ dependencies {
  * (AGP te avisa de esto explícitamente en el error 'Direct local .aar file dependencies ...'). 
  * :contentReference[oaicite:3]{index=3}
  */
+// Disable AAR bundling tasks (Gradle 8+ strict mode workaround)
 afterEvaluate {
-  tasks.matching { t ->
-    t.name == "bundleDebugAar" || t.name == "bundleReleaseAar"
-  }.configureEach {
-    enabled = false
-  }
+    tasks.configureEach { t ->
+        if (t.name.toLowerCase().contains("bundle") && t.name.toLowerCase().contains("aar")) {
+            t.enabled = false
+        }
+    }
 }
