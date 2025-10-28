@@ -1,4 +1,5 @@
 buildscript {
+  // Buildscript is evaluated before everything else so we can't use getExtOrDefault
   def kotlin_version = rootProject.ext.has("kotlinVersion") ?
       rootProject.ext.get("kotlinVersion") :
       project.properties["SherpaOnnxOfflineTts_kotlinVersion"]
@@ -10,6 +11,7 @@ buildscript {
 
   dependencies {
     classpath "com.android.tools.build:gradle:8.0.2"
+    // noinspection DifferentKotlinGradleVersion
     classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
   }
 }
@@ -46,6 +48,7 @@ def supportsNamespace() {
   def parsed = com.android.Version.ANDROID_GRADLE_PLUGIN_VERSION.tokenize('.')
   def major = parsed[0].toInteger()
   def minor = parsed[1].toInteger()
+  // Namespace support was added in 7.3.0
   return (major == 7 && minor >= 3) || major >= 8
 }
 
@@ -75,7 +78,6 @@ android {
 
   lintOptions {
     disable "GradleCompatible"
-    checkReleaseBuilds false
   }
 
   compileOptions {
@@ -83,11 +85,13 @@ android {
     targetCompatibility JavaVersion.VERSION_1_8
   }
 
+  // (opcional pero recomendable) alinear Kotlin/JVM
   kotlinOptions {
     jvmTarget = "1.8"
   }
 
   packagingOptions {
+    // evita choques entre sherpa / onnxruntime / c++ runtime
     pickFirst "lib/**/libonnxruntime.so"
     pickFirst "lib/**/libc++_shared.so"
   }
@@ -96,7 +100,8 @@ android {
 repositories {
   google()
   mavenCentral()
-  // seguimos declarando flatDir para que encuentre el .aar local al compilar
+
+  // Permite resolver el .aar precompilado que viene en esta lib
   flatDir {
     dirs 'libs'
   }
@@ -105,13 +110,29 @@ repositories {
 def kotlin_version = getExtOrDefault("kotlinVersion")
 
 dependencies {
-  // usa la versión de RN que defina la app
+  // React Native base
   implementation "com.facebook.react:react-native:+"
-
   implementation "org.jetbrains.kotlin:kotlin-stdlib:$kotlin_version"
 
-  // 🔑 CLAVE:
-  // Solo lo necesitamos para COMPILAR este módulo.
-  // No queremos que esta librería lo empaquete en su propio AAR.
+  // ⚠ IMPORTANTE:
+  // Le damos el .aar solo para COMPILAR el módulo Sherpa,
+  // pero NO intentamos que Sherpa lo empaquete dentro de su propio AAR.
   compileOnly files('libs/sherpa-onnx-1.10.35.aar')
+}
+
+/**
+ * WORKAROUND Gradle/AGP 8:
+ * Cuando Gradle intenta crear el AAR de ESTE módulo (bundleDebugAar / bundleReleaseAar),
+ * peta porque AGP no permite dependencias .aar locales dentro de otra librería AAR.
+ * Deshabilitamos esas tareas para que este módulo solo se consuma dentro de la app,
+ * no como AAR publicable. Esto es válido en librerías RN usadas directamente por la app. 
+ * (AGP te avisa de esto explícitamente en el error 'Direct local .aar file dependencies ...'). 
+ * :contentReference[oaicite:3]{index=3}
+ */
+afterEvaluate {
+  tasks.matching { t ->
+    t.name == "bundleDebugAar" || t.name == "bundleReleaseAar"
+  }.configureEach {
+    enabled = false
+  }
 }
