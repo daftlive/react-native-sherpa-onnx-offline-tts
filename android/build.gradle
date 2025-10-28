@@ -130,10 +130,8 @@ dependencies {
  * :contentReference[oaicite:3]{index=3}
  */
 // Disable AAR bundling tasks (Gradle 8+ strict mode workaround)
-afterEvaluate {
-  tasks.matching { t ->
-    t.name == "bundleDebugAar" || t.name == "bundleReleaseAar"
-  }.configureEach {
-    enabled = false
-  }
+tasks.whenTaskAdded { task ->
+    if (task.name == "bundleDebugAar" || task.name == "bundleReleaseAar") {
+        task.enabled = false
+    }
 }
